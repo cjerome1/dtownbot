@@ -1,0 +1,19 @@
+{
+    "bot_settings": {
+        "name": "D-TOWN ROLEPLAY",
+        "description": "Bot officiel du serveur D-TOWN ROLEPLAY",
+        "prefix": "!"
+    },
+    "server_info": {
+        "fivem_ip": "148.113.219.113",
+        "rules_channel_id": "1365802245551161424",
+        "donation_info": "donation.dtown@gmail.com"
+    },
+    "colors": {
+        "primary": "00ff00",
+        "success": "00ff00",
+        "error": "ff0000",
+        "warning": "ffaa00",
+        "info": "0099ff"
+    }
+}
