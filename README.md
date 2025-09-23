@@ -6,3 +6,4 @@
 - `/tebex` - Lien vers la boutique officielle du serveur
 - `/f8connect` - Instructions de connexion F8 avec IP du serveur
 - `/menu` - Menu interactif principal avec boutons
+- `/playtime` - 
