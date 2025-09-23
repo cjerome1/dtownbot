@@ -290,11 +290,11 @@ async def menu(interaction: discord.Interaction):
     status_text = f"🟢 {server_info['players']}/{server_info['max_players']} joueurs" if server_info['online'] else "🔴 Hors ligne"
     embed = discord.Embed(
         title="🏠 D-TOWN ROLEPLAY",
-        description="**Serveur de Roleplay Communautaire**\nBienvenue sur notre serveur !",
+        description="**\nBienvenue sur notre serveur !",
         color=int(config['colors']['primary'], 16)
     )
     embed.add_field(name="🎮 Serveur FiveM", value=status_text, inline=True)
-    embed.add_field(name="🏆 Type", value="Roleplay Communautaire", inline=True)
+    embed.add_field(name="🏆 Type", value="Roleplay", inline=True)
     embed.add_field(name="👥 Communauté", value="Active et bienveillante", inline=True)
     embed.set_footer(text="Utilisez les boutons ci-dessous pour naviguer")
     embed.timestamp = datetime.now()
@@ -302,7 +302,7 @@ async def menu(interaction: discord.Interaction):
 
 # ===================== RUN BOT =====================
 if __name__ == "__main__":
-    token = os.getenv('DISCORD_BOT_TOKEN')
+    token = os.getenv('')
     if not token:
         print("❌ ERREUR: Token Discord manquant! Définir DISCORD_BOT_TOKEN")
         exit(1)
