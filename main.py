@@ -1,4 +1,4 @@
-amuse toi a tt corriger. merci : #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Bot Discord D-TOWN ROLEPLAY
 """
