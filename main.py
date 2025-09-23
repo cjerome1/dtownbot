@@ -302,7 +302,7 @@ async def menu(interaction: discord.Interaction):
 
 # ===================== RUN BOT =====================
 if __name__ == "__main__":
-    token = os.getenv('MTQxOTcwMDgxNjAyMTAyODkwNg.Giffhc._TN7QVbaoO7VZS7p1DJh7zWIGVvcjhNRTgTVd8')
+    token = os.getenv 'MTQxOTcwMDgxNjAyMTAyODkwNg.Giffhc._TN7QVbaoO7VZS7p1DJh7zWIGVvcjhNRTgTVd8'
     if not token:
         print("❌ ERREUR: Token Discord manquant! Définir DISCORD_BOT_TOKEN")
         exit(1)
