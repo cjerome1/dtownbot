@@ -34,6 +34,7 @@ ADMIN_ROLE_IDS = [
 
 RUN_BOT = os.getenv("RUN_BOT", "0") == "1"
 DISABLE_BACKGROUND_TASKS = os.getenv("DISABLE_BACKGROUND_TASKS", "0") == "1"
+DISABLE_MYSQL = os.getenv("DISABLE_MYSQL", "1") == "1"  # Temporairement désactivé
 
 class DatabaseManager:
     def __init__(self):
@@ -48,6 +49,10 @@ class DatabaseManager:
         }
     
     async def initialize(self):
+        if DISABLE_MYSQL:
+            print("ℹ️ MySQL désactivé temporairement")
+            return False
+            
         try:
             if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
                 print("⚠️ Configuration MySQL incomplète")
@@ -64,6 +69,9 @@ class DatabaseManager:
         return False
     
     async def get_player_playtime(self, identifier: str) -> Optional[dict]:
+        if DISABLE_MYSQL:
+            return None
+            
         if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
             return None
             
@@ -148,7 +156,10 @@ class DTownBot(commands.Bot):
 
     async def on_ready(self):
         print(f'✅ {self.user} connecté!')
-        print(f'Base de données: {"✅ OK" if self.db_available else "❌ Non disponible"}')
+        if DISABLE_MYSQL:
+            print('🗄️ MySQL: Temporairement désactivé')
+        else:
+            print(f'Base de données: {"✅ OK" if self.db_available else "❌ Non disponible"}')
 
         if not DISABLE_BACKGROUND_TASKS and not self.update_status.is_running():
             self.update_status.start()
@@ -326,7 +337,13 @@ async def playtime(interaction: discord.Interaction, joueur: str = ""):
             color=int(config['colors']['info'], 16)
         )
         
-        if bot.db_available:
+        if DISABLE_MYSQL:
+            embed.add_field(
+                name="Fonctionnalité en Développement",
+                value="```\nLe système de playtime sera disponible\nlors de l'ouverture du serveur.\n\nRestez connectés pour plus d'infos !\n```",
+                inline=False
+            )
+        elif bot.db_available:
             player_data = await db_manager.get_player_playtime(joueur)
             
             if player_data and player_data.get('found'):
@@ -512,7 +529,10 @@ def main():
     try:
         print("🚀 Démarrage D-TOWN ROLEPLAY...")
         print(f"🔒 Tâches fond: {'OFF' if DISABLE_BACKGROUND_TASKS else 'ON'}")
-        print(f"🗄️ MySQL: {'Configuré' if all([MYSQL_HOST, MYSQL_USER]) else 'Non configuré'}")
+        if DISABLE_MYSQL:
+            print("🗄️ MySQL: Temporairement désactivé")
+        else:
+            print(f"🗄️ MySQL: {'Configuré' if all([MYSQL_HOST, MYSQL_USER]) else 'Non configuré'}")
         bot.run(DISCORD_BOT_TOKEN)
     except Exception as e:
         print(f"❌ Erreur démarrage: {e}")
