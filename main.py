@@ -190,7 +190,7 @@ class DTownBot(commands.Bot):
             self.max_players = server_info['max_players']
 
             if server_info['online']:
-                status_text = f"🔶 Dev en cours... Ouverture bientot !"
+                status_text = f"Dev en cours... Ouverture bientot !"
                 await self.change_presence(
                     status=discord.Status.online,
                     activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
