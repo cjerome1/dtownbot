@@ -1,9 +1,11 @@
-# Bot Discord D-TOWN ROLEPLAY
-### Commandes slash disponibles
+/f8connect - Instructions de connexion F8 avec IP du serveur
+/playtime  - Afficher votre temps en ville pour des recompenses
+/donation - Informations pour effectier une donation/menu - Menu interactif principal avec boutons
+/serveur - Vérifie le statut du serveur FiveM en temps réel
+/regles - Affiche lien vers le canal des règles
 
-- `/regles` - Affiche les règles du serveur et lien vers le canal des règles
-- `/serveur` - Vérifie le statut du serveur FiveM en temps réel
-- `/tebex` - Lien vers la boutique officielle du serveur
-- `/f8connect` - Instructions de connexion F8 avec IP du serveur
-- `/menu` - Menu interactif principal avec boutons
-- `/playtime` - 
+
+================================
+Développé pour D-Town Roleplay 
+© CJ Dev
+================================
