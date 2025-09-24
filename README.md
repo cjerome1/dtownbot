@@ -4,8 +4,6 @@
 /serveur - Vérifie le statut du serveur FiveM en temps réel
 /regles - Affiche lien vers le canal des règles
 
-
-================================
 Développé pour D-Town Roleplay 
 © CJ Dev
-================================
+
