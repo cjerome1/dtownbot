@@ -190,7 +190,7 @@ class DTownBot(commands.Bot):
             self.max_players = server_info['max_players']
 
             if server_info['online']:
-                status_text = f"🟢 {self.player_count}/{self.max_players} joueurs en ville"
+                status_text = f"🔶 Serveur OFF"
                 await self.change_presence(
                     status=discord.Status.online,
                     activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
@@ -202,7 +202,7 @@ class DTownBot(commands.Bot):
                 )
         except Exception as e:
             print(f"Erreur statut serveur: {e}")
-            self.server_online = True
+            self.server_online = False
 
     async def get_fivem_server_info(self):
         try:
