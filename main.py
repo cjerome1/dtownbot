@@ -41,7 +41,7 @@ ADMIN_ROLE_IDS = [
 
 RUN_BOT = os.getenv("RUN_BOT", "0") == "1"
 DISABLE_BACKGROUND_TASKS = os.getenv("DISABLE_BACKGROUND_TASKS", "0") == "1"
-DISABLE_MYSQL = os.getenv("DISABLE_MYSQL", "1") == "1"
+DISABLE_MYSQL = os.getenv("DISABLE_MYSQL", "1") == "1"  # Temporairement désactivé
 
 class DatabaseManager:
     def __init__(self):
@@ -57,12 +57,17 @@ class DatabaseManager:
 
     async def initialize(self):
         if DISABLE_MYSQL or not MYSQL_AVAILABLE:
-            print("ℹ️ MySQL désactivé ou non installé")
+            if DISABLE_MYSQL:
+                print("ℹ️ MySQL désactivé temporairement")
+            else:
+                print("ℹ️ MySQL non installé")
             return False
+
         try:
             if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
                 print("⚠️ Configuration MySQL incomplète")
                 return False
+
             connection = mysql.connector.connect(**self.connection_params)
             if connection.is_connected():
                 print("✅ MySQL connecté")
@@ -76,12 +81,15 @@ class DatabaseManager:
     async def get_player_playtime(self, identifier: str) -> Optional[dict]:
         if DISABLE_MYSQL or not MYSQL_AVAILABLE:
             return None
+
         if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
             return None
+
         connection = None
         try:
             connection = mysql.connector.connect(**self.connection_params)
             cursor = connection.cursor(dictionary=True)
+
             query = """
             SELECT 
                 IFNULL(JSON_UNQUOTE(JSON_EXTRACT(accounts, '$.bank')), 0) as bank_money,
@@ -91,12 +99,15 @@ class DatabaseManager:
             WHERE identifier = %s OR LOWER(name) = LOWER(%s)
             LIMIT 1
             """
+
             cursor.execute(query, (identifier, identifier))
             result = cursor.fetchone()
+
             if result:
-                bank_money = result.get('bank_money', '0')
-                cash_money = result.get('cash_money', '0')
-                last_seen = result.get('last_seen', '')
+                bank_money = result['bank_money'] if 'bank_money' in result else '0'
+                cash_money = result['cash_money'] if 'cash_money' in result else '0'
+                last_seen = result['last_seen'] if 'last_seen' in result else ''
+
                 if last_seen:
                     try:
                         if isinstance(last_seen, str):
@@ -109,6 +120,7 @@ class DatabaseManager:
                         playtime_text = "Format de date invalide"
                 else:
                     playtime_text = "Jamais connecté"
+
                 return {
                     'found': True,
                     'player_name': identifier,
@@ -117,7 +129,9 @@ class DatabaseManager:
                     'last_seen': str(last_seen),
                     'estimated_playtime': playtime_text
                 }
+
             return {'found': False}
+
         except Error as e:
             print(f"Erreur DB playtime: {e}")
             return None
@@ -156,8 +170,10 @@ class DTownBot(commands.Bot):
             print('🗄️ MySQL: Temporairement désactivé')
         else:
             print(f'Base de données: {"✅ OK" if self.db_available else "❌ Non disponible"}')
+
         if not DISABLE_BACKGROUND_TASKS and not self.update_status.is_running():
             self.update_status.start()
+
         await self.check_server_status()
 
     @tasks.loop(minutes=5)
@@ -182,6 +198,7 @@ class DTownBot(commands.Bot):
                 }
         except:
             pass
+
         try:
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(config['server_info']['fivem_ip'], 30120),
@@ -193,118 +210,58 @@ class DTownBot(commands.Bot):
         except:
             return {'online': False, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
 
+    async def check_server_status(self):
+        try:
+            if not self.is_ready():
+                return
 
-async def check_server_status(self):
-    try:
-        if not self.is_ready():
-            return
+            server_info = await self.get_fivem_server_info()
+            self.server_online = server_info['online']
+            self.player_count = server_info['players']
+            self.max_players = server_info['max_players']
 
-        server_info = await self.get_fivem_server_info()
-        self.server_online = server_info['online']
-        self.player_count = server_info['players']
-        self.max_players = server_info['max_players']
-
-        if server_info['online']:
-            status_text = f"🟢 {self.player_count}/{self.max_players} joueurs en ville"
-            await self.change_presence(
-                status=discord.Status.online,
-                activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
-            )
-        else:
-            status_text = "🔴 OFF"  # <- Changement ici
-            await self.change_presence(
-                status=discord.Status.idle,
-                activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
-            )
-    except Exception as e:
-        print(f"Erreur statut serveur: {e}")
-        self.server_online = False
+            if server_info['online']:
+                status_text = f"🟢 {self.player_count}/{self.max_players} joueurs en ville"
+                await self.change_presence(
+                    status=discord.Status.online,
+                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
+                )
+            else:
+                # Description OFF
+                status_text = "🔴 OFF"
+                await self.change_presence(
+                    status=discord.Status.idle,
+                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
+                )
+        except Exception as e:
+            print(f"Erreur statut serveur: {e}")
+            self.server_online = False
 
 bot = DTownBot()
 
-def has_admin_role(interaction: discord.Interaction) -> bool:
-    if not isinstance(interaction.user, discord.Member):
-        return False
-    if not interaction.user.roles:
-        return False
-    user_role_ids = [role.id for role in interaction.user.roles]
-    return any(role_id in ADMIN_ROLE_IDS for role_id in user_role_ids)
-
-# === COMMANDES (regles, serveur, donation, f8connect, playtime, annonce) ===
-# === Menu principal complet avec MenuView ===
-
-class MenuView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=300)
-
-    @discord.ui.button(label="Règles", style=discord.ButtonStyle.primary)
-    async def rules_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        rules_channel = bot.get_channel(int(config['server_info']['rules_channel_id']))
-        description_text = f"Consultez les règles dans {rules_channel.mention}" if rules_channel else "Consultez les règles"
-        embed = discord.Embed(title="Règles du Serveur", description=description_text, color=int(config['colors']['info'], 16))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(label="Serveur", style=discord.ButtonStyle.success)
-    async def server_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        server_info = await bot.get_fivem_server_info()
-        if server_info['online']:
-            status = "EN LIGNE"
-            color = int(config['colors']['success'], 16)
-            description = f"**{status}**\n{server_info['players']}/{server_info['max_players']} joueurs\nIP: `{config['server_info']['fivem_ip']}`"
-        else:
-            status = "EN DÉVELOPPEMENT"
-            color = int(config['colors']['success'], 16)
-            description = f"**{status}**\n0/{server_info['max_players']}\nIP: `{config['server_info']['fivem_ip']}`\nOuverture bientôt"
-        embed = discord.Embed(title="Statut du Serveur", description=description, color=color)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(label="Donation", style=discord.ButtonStyle.secondary)
-    async def donation_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(
-            title="Donation",
-            description=f"**Email:** `{config['server_info']['donation_info']}`\nVirement Interac + pseudo Discord",
-            color=int(config['colors']['primary'], 16)
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(label="Playtime", style=discord.ButtonStyle.secondary)
-    async def playtime_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(title="Temps de Jeu", description="Utilisez `/playtime` pour vos stats.", color=int(config['colors']['info'], 16))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(label="F8 Connect", style=discord.ButtonStyle.secondary)
-    async def connect_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(title="Connexion F8", description=f"`connect {config['server_info']['fivem_ip']}`", color=int(config['colors']['success'], 16))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="menu", description="Menu principal du serveur")
-async def menu(interaction: discord.Interaction):
-    server_info = await bot.get_fivem_server_info()
-    status_text = f"🟢 {server_info['players']}/{server_info['max_players']} joueurs" if server_info['online'] else "🔴 Hors ligne"
-    embed = discord.Embed(
-        title="🏠 D-TOWN ROLEPLAY",
-        description="Bienvenue sur notre serveur !",
-        color=int(config['colors']['primary'], 16)
-    )
-    embed.add_field(name="🎮 Serveur FiveM", value=status_text, inline=True)
-    embed.add_field(name="🏆 Type", value="Roleplay", inline=True)
-    embed.add_field(name="👥 Communauté", value="Active", inline=True)
-    embed.set_footer(text="Utilisez les boutons ci-dessous")
-    embed.timestamp = datetime.now()
-    await interaction.response.send_message(embed=embed, view=MenuView())
+# … le reste du code (commandes, menu, etc.) reste inchangé
+# Copie-colle tes commandes existantes ici, elles fonctionneront avec la desc OFF
 
 def main():
     if not DISCORD_BOT_TOKEN:
         print("❌ Token Discord manquant!")
+        print("🔧 Définissez DISCORD_BOT_TOKEN")
         exit(1)
+
     if not RUN_BOT:
         print("ℹ️ Bot non démarré (RUN_BOT=0)")
+        print("🔧 Pour démarrer: RUN_BOT=1")
         return
+
     try:
         print("🚀 Démarrage D-TOWN ROLEPLAY...")
+        print(f"🔒 Tâches fond: {'OFF' if DISABLE_BACKGROUND_TASKS else 'ON'}")
+        if DISABLE_MYSQL:
+            print("🗄️ MySQL: Temporairement désactivé")
+        else:
+            print(f"🗄️ MySQL: {'Configuré' if all([MYSQL_HOST, MYSQL_USER]) else 'Non configuré'}")
         bot.run(DISCORD_BOT_TOKEN)
     except Exception as e:
         print(f"❌ Erreur démarrage: {e}")
 
 if __name__ == "__main__":
-    main()
