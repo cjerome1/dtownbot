@@ -5,12 +5,19 @@ import discord
 from discord.ext import commands, tasks
 import json
 import os
-import mysql.connector
-from mysql.connector import Error
 import requests
 import asyncio
 from datetime import datetime
 from typing import Optional
+
+# Import MySQL seulement si nécessaire
+try:
+    import mysql.connector
+    from mysql.connector import Error
+    MYSQL_AVAILABLE = True
+except ImportError:
+    MYSQL_AVAILABLE = False
+    Error = Exception
 
 config_path = os.path.join(os.path.dirname(__file__), 'config.json')
 try:
@@ -49,8 +56,11 @@ class DatabaseManager:
         }
     
     async def initialize(self):
-        if DISABLE_MYSQL:
-            print("ℹ️ MySQL désactivé temporairement")
+        if DISABLE_MYSQL or not MYSQL_AVAILABLE:
+            if DISABLE_MYSQL:
+                print("ℹ️ MySQL désactivé temporairement")
+            else:
+                print("ℹ️ MySQL non installé")
             return False
             
         try:
@@ -69,7 +79,7 @@ class DatabaseManager:
         return False
     
     async def get_player_playtime(self, identifier: str) -> Optional[dict]:
-        if DISABLE_MYSQL:
+        if DISABLE_MYSQL or not MYSQL_AVAILABLE:
             return None
             
         if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
@@ -537,5 +547,7 @@ def main():
     except Exception as e:
         print(f"❌ Erreur démarrage: {e}")
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()
