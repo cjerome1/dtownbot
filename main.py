@@ -250,7 +250,7 @@ async def regles(interaction: discord.Interaction):
     try:
         rules_channel = bot.get_channel(int(config['server_info']['rules_channel_id']))
         embed = discord.Embed(
-            title="📋 Règles du Serveur D-TOWN ROLEPLAY",
+            title="Règles du Serveur D-TOWN ROLEPLAY",
             description="Voici les règles officielles de notre serveur :",
             color=int(config['colors']['info'], 16)
         )
@@ -271,7 +271,7 @@ async def serveur(interaction: discord.Interaction):
         server_info = await bot.get_fivem_server_info()
         online = server_info['online']
         embed = discord.Embed(
-            title="🖥️ Statut du Serveur D-TOWN ROLEPLAY",
+            title="Statut du Serveur D-TOWN ROLEPLAY",
             color=int(config['colors']['success'], 16) if online else int(config['colors']['error'], 16)
         )
         if online:
