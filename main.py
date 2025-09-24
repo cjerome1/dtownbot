@@ -193,31 +193,32 @@ class DTownBot(commands.Bot):
         except:
             return {'online': False, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
 
-    async def check_server_status(self):
-        try:
-            if not self.is_ready():
-                return
-            server_info = await self.get_fivem_server_info()
-            self.server_online = server_info['online']
-            self.player_count = server_info['players']
-            self.max_players = server_info['max_players']
 
-            if server_info['online']:
-                status_text = f"🟢 {self.player_count}/{self.max_players} joueurs en ville"
-                await self.change_presence(
-                    status=discord.Status.online,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
-                )
-            else:
-                # === MODIF : offline = en dev vert ===
-                status_text = "🟢 Serveur en développement - Ouverture bientôt"
-                await self.change_presence(
-                    status=discord.Status.idle,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
-                )
-        except Exception as e:
-            print(f"Erreur statut serveur: {e}")
-            self.server_online = False
+async def check_server_status(self):
+    try:
+        if not self.is_ready():
+            return
+
+        server_info = await self.get_fivem_server_info()
+        self.server_online = server_info['online']
+        self.player_count = server_info['players']
+        self.max_players = server_info['max_players']
+
+        if server_info['online']:
+            status_text = f"🟢 {self.player_count}/{self.max_players} joueurs en ville"
+            await self.change_presence(
+                status=discord.Status.online,
+                activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
+            )
+        else:
+            status_text = "🔴 OFF"  # <- Changement ici
+            await self.change_presence(
+                status=discord.Status.idle,
+                activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
+            )
+    except Exception as e:
+        print(f"Erreur statut serveur: {e}")
+        self.server_online = False
 
 bot = DTownBot()
 
