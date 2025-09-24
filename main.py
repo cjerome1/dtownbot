@@ -29,7 +29,7 @@ except FileNotFoundError:
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 MYSQL_HOST = os.getenv("MYSQL_HOST")
-MYSQL_USER = os.getenv("MYSQL_USER")
+MYSQL_USER = os.getenv("MYSQL_USER") 
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE")
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
@@ -54,7 +54,7 @@ class DatabaseManager:
             'autocommit': True,
             'charset': 'utf8mb4'
         }
-
+    
     async def initialize(self):
         if DISABLE_MYSQL or not MYSQL_AVAILABLE:
             if DISABLE_MYSQL:
@@ -62,12 +62,12 @@ class DatabaseManager:
             else:
                 print("ℹ️ MySQL non installé")
             return False
-
+            
         try:
             if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
                 print("⚠️ Configuration MySQL incomplète")
                 return False
-
+            
             connection = mysql.connector.connect(**self.connection_params)
             if connection.is_connected():
                 print("✅ MySQL connecté")
@@ -77,19 +77,19 @@ class DatabaseManager:
             print(f"⚠️ MySQL erreur: {e}")
             return False
         return False
-
+    
     async def get_player_playtime(self, identifier: str) -> Optional[dict]:
         if DISABLE_MYSQL or not MYSQL_AVAILABLE:
             return None
-
+            
         if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
             return None
-
+            
         connection = None
         try:
             connection = mysql.connector.connect(**self.connection_params)
             cursor = connection.cursor(dictionary=True)
-
+            
             query = """
             SELECT 
                 IFNULL(JSON_UNQUOTE(JSON_EXTRACT(accounts, '$.bank')), 0) as bank_money,
@@ -99,15 +99,15 @@ class DatabaseManager:
             WHERE identifier = %s OR LOWER(name) = LOWER(%s)
             LIMIT 1
             """
-
+            
             cursor.execute(query, (identifier, identifier))
             result = cursor.fetchone()
-
+            
             if result:
                 bank_money = result['bank_money'] if 'bank_money' in result else '0'
                 cash_money = result['cash_money'] if 'cash_money' in result else '0'
                 last_seen = result['last_seen'] if 'last_seen' in result else ''
-
+                
                 if last_seen:
                     try:
                         if isinstance(last_seen, str):
@@ -120,7 +120,7 @@ class DatabaseManager:
                         playtime_text = "Format de date invalide"
                 else:
                     playtime_text = "Jamais connecté"
-
+                
                 return {
                     'found': True,
                     'player_name': identifier,
@@ -129,9 +129,9 @@ class DatabaseManager:
                     'last_seen': str(last_seen),
                     'estimated_playtime': playtime_text
                 }
-
+            
             return {'found': False}
-
+            
         except Error as e:
             print(f"Erreur DB playtime: {e}")
             return None
@@ -147,7 +147,7 @@ class DTownBot(commands.Bot):
         intents.message_content = True
         intents.guilds = True
         intents.members = True
-
+        
         super().__init__(
             command_prefix=config['bot_settings']['prefix'],
             intents=intents,
@@ -174,12 +174,30 @@ class DTownBot(commands.Bot):
         if not DISABLE_BACKGROUND_TASKS and not self.update_status.is_running():
             self.update_status.start()
 
-        await self.check_server_status()
+        # Status par défaut si serveur off
+        await self.change_presence(
+            status=discord.Status.idle,
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,
+                name="🔶 Serveur en développement - OFF"
+            )
+        )
 
     @tasks.loop(minutes=5)
     async def update_status(self):
         if not DISABLE_BACKGROUND_TASKS:
-            await self.check_server_status()
+            server_info = await self.get_fivem_server_info()
+            if server_info['online']:
+                status_text = f"🟢 {server_info['players']}/{server_info['max_players']} joueurs en ville"
+                await self.change_presence(
+                    status=discord.Status.online,
+                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
+                )
+            else:
+                await self.change_presence(
+                    status=discord.Status.idle,
+                    activity=discord.Activity(type=discord.ActivityType.watching, name="🔶 Serveur en développement - OFF")
+                )
 
     async def get_fivem_server_info(self):
         try:
@@ -210,49 +228,23 @@ class DTownBot(commands.Bot):
         except:
             return {'online': False, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
 
-    async def check_server_status(self):
-        try:
-            if not self.is_ready():
-                return
-
-            server_info = await self.get_fivem_server_info()
-            self.server_online = server_info['online']
-            self.player_count = server_info['players']
-            self.max_players = server_info['max_players']
-
-            if server_info['online']:
-                status_text = f"🟢 {self.player_count}/{self.max_players} joueurs en ville"
-                await self.change_presence(
-                    status=discord.Status.online,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
-                )
-            else:
-                # Description OFF
-                status_text = "🔴 OFF"
-                await self.change_presence(
-                    status=discord.Status.idle,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
-                )
-        except Exception as e:
-            print(f"Erreur statut serveur: {e}")
-            self.server_online = False
-
 bot = DTownBot()
 
-# … le reste du code (commandes, menu, etc.) reste inchangé
-# Copie-colle tes commandes existantes ici, elles fonctionneront avec la desc OFF
+# --- Toutes tes commandes slash et vues ici restent inchangées ---
+# Copie exactement toutes les définitions: /regles, /serveur, /donation, /f8connect, /playtime, /annonce, /menu
+# et la classe MenuView, comme dans ton script original
 
 def main():
     if not DISCORD_BOT_TOKEN:
         print("❌ Token Discord manquant!")
         print("🔧 Définissez DISCORD_BOT_TOKEN")
         exit(1)
-
+    
     if not RUN_BOT:
         print("ℹ️ Bot non démarré (RUN_BOT=0)")
         print("🔧 Pour démarrer: RUN_BOT=1")
         return
-
+    
     try:
         print("🚀 Démarrage D-TOWN ROLEPLAY...")
         print(f"🔒 Tâches fond: {'OFF' if DISABLE_BACKGROUND_TASKS else 'ON'}")
@@ -262,6 +254,4 @@ def main():
             print(f"🗄️ MySQL: {'Configuré' if all([MYSQL_HOST, MYSQL_USER]) else 'Non configuré'}")
         bot.run(DISCORD_BOT_TOKEN)
     except Exception as e:
-        print(f"❌ Erreur démarrage: {e}")
-
-if __name__ == "__main__":
+        print(f"❌ Erreur démarrage:
