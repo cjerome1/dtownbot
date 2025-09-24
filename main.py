@@ -202,7 +202,7 @@ class DTownBot(commands.Bot):
                 )
         except Exception as e:
             print(f"Erreur statut serveur: {e}")
-            self.server_online = False
+            self.server_online = True
 
     async def get_fivem_server_info(self):
         try:
