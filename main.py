@@ -9,6 +9,8 @@ import requests
 import asyncio
 from datetime import datetime
 from typing import Optional
+import random
+import re
 
 # Import MySQL seulement si nécessaire
 try:
@@ -38,6 +40,8 @@ ADMIN_ROLE_IDS = [
     1342882966686404628, 1342883276066652223, 1372313750224376008,
     1411835985666244688, 1370558513180311582, 1413711444096061510
 ]
+
+GIVEAWAY_CHANNEL_ID = 1421094996899266582  # Panel giveaway
 
 RUN_BOT = os.getenv("RUN_BOT", "0") == "1"
 DISABLE_BACKGROUND_TASKS = os.getenv("DISABLE_BACKGROUND_TASKS", "0") == "1"
@@ -244,24 +248,6 @@ def has_admin_role(interaction: discord.Interaction) -> bool:
     return any(role_id in ADMIN_ROLE_IDS for role_id in user_role_ids)
 
 # ---------------- COMMANDES SLASH ----------------
-# /regles
-@bot.tree.command(name="regles", description="Affiche les règles du serveur")
-async def regles(interaction: discord.Interaction):
-    try:
-        rules_channel = bot.get_channel(int(config['server_info']['rules_channel_id']))
-        embed = discord.Embed(
-            title="Règles du Serveur D-TOWN ROLEPLAY",
-            description="Voici les règles officielles de notre serveur :",
-            color=int(config['colors']['info'], 16)
-        )
-        rules_text = f"Consultez toutes les règles dans {rules_channel.mention}" if rules_channel else "Consultez toutes les règles"
-        embed.add_field(name="📍 Canal des Règles", value=rules_text, inline=False)
-        embed.add_field(name="⚠️ Important", value="Le respect des règles est obligatoire.", inline=False)
-        embed.set_footer(text="D-TOWN ROLEPLAY")
-        embed.timestamp = datetime.now()
-        await interaction.response.send_message(embed=embed)
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Erreur: {e}", ephemeral=True)
 
 # /serveur
 @bot.tree.command(name="serveur", description="Statut du serveur FiveM")
@@ -388,58 +374,115 @@ async def annonce(interaction: discord.Interaction, titre: str, message: str, ca
         error_embed = discord.Embed(title="❌ Erreur", description=f"Impossible d'envoyer l'annonce: {e}", color=int(config['colors']['error'], 16))
         await interaction.response.send_message(embed=error_embed, ephemeral=True)
 
-# /menu avec boutons
-class MenuView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=300)
+# ---------------- GIVEAWAY MULTI AVEC TIMER LIVE ----------------
+active_giveaways = {}  # message_id : asyncio.Task
 
-    @discord.ui.button(label="Règles", style=discord.ButtonStyle.primary)
-    async def rules_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        rules_channel = bot.get_channel(int(config['server_info']['rules_channel_id']))
-        description_text = f"Consultez les règles dans {rules_channel.mention}" if rules_channel else "Consultez les règles"
-        embed = discord.Embed(title="Règles du Serveur", description=description_text, color=int(config['colors']['info'], 16))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+def parse_duration(duration_str: str) -> int:
+    """Convertit 1s/1m/1h/1d en secondes"""
+    match = re.match(r"^(\d+)([smhd])$", duration_str)
+    if not match:
+        return None
+    value, unit = match.groups()
+    value = int(value)
+    if unit == "s":
+        return value
+    elif unit == "m":
+        return value * 60
+    elif unit == "h":
+        return value * 3600
+    elif unit == "d":
+        return value * 86400
+    return None
 
-    @discord.ui.button(label="Serveur", style=discord.ButtonStyle.success)
-    async def server_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        server_info = await bot.get_fivem_server_info()
-        if server_info['online']:
-            status = "EN LIGNE"
-            color = int(config['colors']['success'], 16)
-            description = f"**{status}**\n{server_info['players']}/{server_info['max_players']} joueurs\nIP: `{config['server_info']['fivem_ip']}`"
+def format_time(seconds: int) -> str:
+    """Formate un nombre de secondes en hh:mm:ss ou mm:ss"""
+    if seconds >= 3600:
+        h = seconds // 3600
+        m = (seconds % 3600) // 60
+        s = seconds % 60
+        return f"{h}h {m}m {s}s"
+    elif seconds >= 60:
+        m = seconds // 60
+        s = seconds % 60
+        return f"{m}m {s}s"
+    else:
+        return f"{seconds}s"
+
+async def run_giveaway(canal: discord.TextChannel, message: discord.Message, prix: str, total_seconds: int):
+    remaining = total_seconds
+    try:
+        while remaining > 0:
+            try:
+                msg = await canal.fetch_message(message.id)
+                embed = msg.embeds[0]
+                embed.description = f"Réagissez avec 🎉 pour participer!\n\n**Lot:** {prix}\n**Temps restant:** {format_time(remaining)}"
+                await msg.edit(embed=embed)
+            except Exception:
+                pass
+            await asyncio.sleep(5)  # met à jour toutes les 5 secondes
+            remaining -= 5
+        # Fin du giveaway
+        msg = await canal.fetch_message(message.id)
+        users = await msg.reactions[0].users().flatten() if msg.reactions else []
+        users = [u for u in users if not u.bot]
+        if not users:
+            await canal.send("❌ Personne n'a participé au giveaway.")
         else:
-            status = "EN DÉVELOPPEMENT"
-            color = int(config['colors']['warning'], 16)
-            description = f"**{status}**\n0/{server_info['max_players']}\nIP: `{config['server_info']['fivem_ip']}`\nOuverture bientôt"
-        embed = discord.Embed(title="Statut du Serveur", description=description, color=color)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            winner = random.choice(users)
+            await canal.send(f"🎉 Félicitations {winner.mention} ! Tu as gagné **{prix}** 🎁")
+        # Mettre à jour l’embed final
+        embed = msg.embeds[0]
+        embed.description += "\n\n⏰ Giveaway terminé"
+        await msg.edit(embed=embed)
+    finally:
+        if message.id in active_giveaways:
+            del active_giveaways[message.id]
 
-    @discord.ui.button(label="Donation", style=discord.ButtonStyle.secondary)
-    async def donation_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(title="Donation", description=f"**Email:** `{config['server_info']['donation_info']}`\nVirement Interac + pseudo Discord", color=int(config['colors']['primary'], 16))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+@bot.tree.command(name="giveaway", description="[ADMIN] Lancer un giveaway")
+async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
+    if not has_admin_role(interaction):
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title="❌ Accès Refusé",
+                description="Commande réservée aux administrateurs.",
+                color=int(config['colors']['error'], 16)
+            ), ephemeral=True
+        )
+        return
 
-    @discord.ui.button(label="Playtime", style=discord.ButtonStyle.secondary)
-    async def playtime_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(title="Temps de Jeu", description="Utilisez `/playtime` pour vos stats.", color=int(config['colors']['info'], 16))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+    total_seconds = parse_duration(duree)
+    if total_seconds is None:
+        await interaction.response.send_message(
+            "❌ Durée invalide. Utilise `1s`, `1m`, `1h` ou `1d`.",
+            ephemeral=True
+        )
+        return
 
-    @discord.ui.button(label="F8 Connect", style=discord.ButtonStyle.secondary)
-    async def connect_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = discord.Embed(title="Connexion F8", description=f"`connect {config['server_info']['fivem_ip']}`", color=int(config['colors']['success'], 16))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+    canal = bot.get_channel(GIVEAWAY_CHANNEL_ID)
+    if canal is None:
+        await interaction.response.send_message("❌ Canal de giveaway introuvable.", ephemeral=True)
+        return
 
-@bot.tree.command(name="menu", description="Menu principal du serveur")
-async def menu(interaction: discord.Interaction):
-    server_info = await bot.get_fivem_server_info()
-    status_text = f"🟢 {server_info['players']}/{server_info['max_players']} joueurs" if server_info['online'] else "🔴 Hors ligne"
-    embed = discord.Embed(title="🏠 D-TOWN ROLEPLAY", description="Bienvenue sur notre serveur !", color=int(config['colors']['primary'], 16))
-    embed.add_field(name="🎮 Serveur FiveM", value=status_text, inline=True)
-    embed.add_field(name="🏆 Type", value="Roleplay", inline=True)
-    embed.add_field(name="👥 Communauté", value="Active", inline=True)
-    embed.set_footer(text="Utilisez les boutons ci-dessous")
-    embed.timestamp = datetime.now()
-    await interaction.response.send_message(embed=embed, view=MenuView())
+    embed = discord.Embed(
+        title="🎉 GIVEAWAY 🎉",
+        description=f"Réagissez avec 🎉 pour participer!\n\n**Lot:** {prix}\n**Temps restant:** {format_time(total_seconds)}",
+        color=int(config['colors']['primary'], 16)
+    )
+    embed.set_footer(text=f"Lancé par {interaction.user.display_name}")
+    message = await canal.send(embed=embed)
+    await message.add_reaction("🎉")
+
+    task = asyncio.create_task(run_giveaway(canal, message, prix, total_seconds))
+    active_giveaways[message.id] = task
+
+    await interaction.response.send_message(
+        embed=discord.Embed(
+            title="✅ Giveaway lancé",
+            description=f"Giveaway **{prix}** lancé dans {canal.mention} pour `{duree}`.",
+            color=int(config['colors']['success'], 16)
+        ),
+        ephemeral=True
+    )
 
 # ---------------- FIN COMMANDES SLASH ----------------
 
