@@ -7,10 +7,10 @@ import json
 import os
 import requests
 import asyncio
+import re
+import random
 from datetime import datetime
 from typing import Optional
-import random
-import re
 
 # Import MySQL seulement si nécessaire
 try:
@@ -41,12 +41,14 @@ ADMIN_ROLE_IDS = [
     1411835985666244688, 1370558513180311582, 1413711444096061510
 ]
 
-GIVEAWAY_CHANNEL_ID = 1421094996899266582  # Panel giveaway
+GIVEAWAY_ROLE_ID = 1365805440109117530  # Rôle qui peut participer
+GIVEAWAY_CHANNEL_ID = 1421094996899266582  # Panel de giveaway
 
 RUN_BOT = os.getenv("RUN_BOT", "0") == "1"
 DISABLE_BACKGROUND_TASKS = os.getenv("DISABLE_BACKGROUND_TASKS", "0") == "1"
-DISABLE_MYSQL = os.getenv("DISABLE_MYSQL", "1") == "1"  # Temporairement désactivé
+DISABLE_MYSQL = os.getenv("DISABLE_MYSQL", "1")  # Temporairement désactivé
 
+# ---------------- DATABASE MANAGER ----------------
 class DatabaseManager:
     def __init__(self):
         self.connection_params = {
@@ -145,6 +147,7 @@ class DatabaseManager:
 
 db_manager = DatabaseManager()
 
+# ---------------- BOT INIT ----------------
 class DTownBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -178,7 +181,6 @@ class DTownBot(commands.Bot):
         if not DISABLE_BACKGROUND_TASKS and not self.update_status.is_running():
             self.update_status.start()
 
-        # Vérification initiale du serveur
         await self.update_status_once()
 
     @tasks.loop(minutes=5)
@@ -247,138 +249,11 @@ def has_admin_role(interaction: discord.Interaction) -> bool:
     user_role_ids = [role.id for role in interaction.user.roles]
     return any(role_id in ADMIN_ROLE_IDS for role_id in user_role_ids)
 
-# ---------------- COMMANDES SLASH ----------------
-
-# /serveur
-@bot.tree.command(name="serveur", description="Statut du serveur FiveM")
-async def serveur(interaction: discord.Interaction):
-    await interaction.response.defer()
-    try:
-        server_info = await bot.get_fivem_server_info()
-        online = server_info['online']
-        embed = discord.Embed(
-            title="Statut du Serveur D-TOWN ROLEPLAY",
-            color=int(config['colors']['success'], 16) if online else int(config['colors']['error'], 16)
-        )
-        if online:
-            embed.add_field(name="🟢 Statut", value="**EN LIGNE**", inline=True)
-            embed.add_field(name="👥 Joueurs", value=f"**{server_info['players']}/{server_info['max_players']}**", inline=True)
-            embed.add_field(name="📍 IP", value=f"`{config['server_info']['fivem_ip']}`", inline=True)
-            embed.add_field(name="🎮 Connexion", value="Utilisez `/f8connect`", inline=False)
-        else:
-            embed.add_field(name="🔶 Statut", value="**EN DÉVELOPPEMENT**", inline=True)
-            embed.add_field(name="👥 Joueurs", value="**0/64**", inline=True)
-            embed.add_field(name="📍 IP", value=f"`{config['server_info']['fivem_ip']}`", inline=True)
-            embed.add_field(name="📅 Ouverture", value="**Bientôt disponible**", inline=False)
-        embed.set_footer(text="Mise à jour toutes les 5 minutes")
-        embed.timestamp = datetime.now()
-        await interaction.followup.send(embed=embed)
-    except Exception as e:
-        error_embed = discord.Embed(
-            title="❌ Erreur",
-            description=f"Impossible de vérifier le serveur: {e}",
-            color=int(config['colors']['error'], 16)
-        )
-        await interaction.followup.send(embed=error_embed)
-
-# /donation
-@bot.tree.command(name="donation", description="Informations pour faire un don")
-async def donation(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="💵 Donation D-TOWN ROLEPLAY",
-        description="Soutenez le serveur par virement Interac",
-        color=int(config['colors']['primary'], 16)
-    )
-    embed.add_field(
-        name="Virement Interac",
-        value=f"**Email:** `{config['server_info']['donation_info']}`",
-        inline=False
-    )
-    embed.add_field(
-        name="Instructions",
-        value="1. App bancaire\n2. Virement Interac\n3. Email ci-dessus\n4. Pseudo Discord en note",
-        inline=False
-    )
-    embed.set_footer(text="Merci de soutenir D-TOWN ROLEPLAY")
-    embed.timestamp = datetime.now()
-    await interaction.response.send_message(embed=embed)
-
-# /f8connect
-@bot.tree.command(name="f8connect", description="Informations de connexion F8")
-async def f8connect(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="Connexion F8 - D-TOWN ROLEPLAY",
-        description=f"Commande pour vous connecter :\n`connect {config['server_info']['fivem_ip']}`",
-        color=int(config['colors']['success'], 16)
-    )
-    embed.set_footer(text="Bon jeu sur D-TOWN ROLEPLAY")
-    embed.timestamp = datetime.now()
-    await interaction.response.send_message(embed=embed)
-
-# /playtime
-@bot.tree.command(name="playtime", description="Temps de jeu d'un joueur")
-async def playtime(interaction: discord.Interaction, joueur: str = ""):
-    await interaction.response.defer()
-    if not joueur:
-        joueur = interaction.user.display_name
-    try:
-        embed = discord.Embed(title=f"Temps de Jeu - {joueur}", color=int(config['colors']['info'], 16))
-        if DISABLE_MYSQL:
-            embed.add_field(name="Fonctionnalité en Développement",
-                            value="Le système de playtime sera disponible lors de l'ouverture du serveur.", inline=False)
-        elif bot.db_available:
-            player_data = await db_manager.get_player_playtime(joueur)
-            if player_data and player_data.get('found'):
-                embed.add_field(name="Statistiques Joueur",
-                                value=f"Banque: ${player_data['bank_money']}\nLiquide: ${player_data['cash_money']}\nTemps: {player_data['estimated_playtime']}",
-                                inline=False)
-                embed.add_field(name="Dernière Connexion", value=f"{player_data['last_seen']}", inline=False)
-            else:
-                embed.add_field(name="Joueur Introuvable", value="Aucun joueur trouvé avec ce nom.", inline=False)
-        else:
-            embed.add_field(name="Base de Données Indisponible", value="Connexion MySQL requise", inline=False)
-        server_info = await bot.get_fivem_server_info()
-        if server_info['online']:
-            embed.add_field(name="Serveur", value=f"En ligne - {server_info['players']}/{server_info['max_players']} joueurs", inline=False)
-        else:
-            embed.add_field(name="Serveur Hors Ligne", value="Le serveur FiveM n'est pas accessible.", inline=False)
-        embed.set_footer(text=f"Demande par {interaction.user.display_name}")
-        embed.timestamp = datetime.now()
-        await interaction.followup.send(embed=embed)
-    except Exception as e:
-        error_embed = discord.Embed(title="❌ Erreur", description=f"Impossible de récupérer les informations: {e}", color=int(config['colors']['error'], 16))
-        await interaction.followup.send(embed=error_embed)
-
-# /annonce
-@bot.tree.command(name="annonce", description="[ADMIN] Envoyer une annonce")
-async def annonce(interaction: discord.Interaction, titre: str, message: str, canal: Optional[discord.TextChannel] = None):
-    if not has_admin_role(interaction):
-        await interaction.response.send_message(embed=discord.Embed(title="❌ Accès Refusé", description="Commande réservée aux administrateurs.", color=int(config['colors']['error'], 16)), ephemeral=True)
-        return
-    if canal is None:
-        if isinstance(interaction.channel, discord.TextChannel):
-            canal = interaction.channel
-        else:
-            await interaction.response.send_message(embed=discord.Embed(title="❌ Erreur", description="Utilisez cette commande dans un canal textuel ou spécifiez un canal.", color=int(config['colors']['error'], 16)), ephemeral=True)
-            return
-    try:
-        announcement_embed = discord.Embed(title=f"📢 {titre}", description=message, color=int(config['colors']['primary'], 16))
-        announcement_embed.set_footer(text=f"Annonce par {interaction.user.display_name}")
-        announcement_embed.timestamp = datetime.now()
-        await canal.send(embed=announcement_embed)
-        canal_name = getattr(canal, 'mention', f"#{getattr(canal, 'name', 'canal')}")
-        success_embed = discord.Embed(title="✅ Annonce Envoyée", description=f"L'annonce **{titre}** a été envoyée dans {canal_name}", color=int(config['colors']['success'], 16))
-        await interaction.response.send_message(embed=success_embed, ephemeral=True)
-        print(f"📢 Annonce: {interaction.user.display_name} -> #{canal.name}: {titre}")
-    except Exception as e:
-        error_embed = discord.Embed(title="❌ Erreur", description=f"Impossible d'envoyer l'annonce: {e}", color=int(config['colors']['error'], 16))
-        await interaction.response.send_message(embed=error_embed, ephemeral=True)
-
-# ---------------- GIVEAWAY MULTI AVEC TIMER LIVE ----------------
+# ---------------- GIVEAWAY ----------------
 active_giveaways = {}  # message_id : asyncio.Task
+participants_giveaways = {}  # message_id : list of discord.Member
 
 def parse_duration(duration_str: str) -> int:
-    """Convertit 1s/1m/1h/1d en secondes"""
     match = re.match(r"^(\d+)([smhd])$", duration_str)
     if not match:
         return None
@@ -395,7 +270,6 @@ def parse_duration(duration_str: str) -> int:
     return None
 
 def format_time(seconds: int) -> str:
-    """Formate un nombre de secondes en hh:mm:ss ou mm:ss"""
     if seconds >= 3600:
         h = seconds // 3600
         m = (seconds % 3600) // 60
@@ -408,35 +282,71 @@ def format_time(seconds: int) -> str:
     else:
         return f"{seconds}s"
 
-async def run_giveaway(canal: discord.TextChannel, message: discord.Message, prix: str, total_seconds: int):
-    remaining = total_seconds
-    try:
-        while remaining > 0:
-            try:
-                msg = await canal.fetch_message(message.id)
-                embed = msg.embeds[0]
-                embed.description = f"Réagissez avec 🎉 pour participer!\n\n**Lot:** {prix}\n**Temps restant:** {format_time(remaining)}"
-                await msg.edit(embed=embed)
-            except Exception:
-                pass
-            await asyncio.sleep(5)  # met à jour toutes les 5 secondes
-            remaining -= 5
-        # Fin du giveaway
-        msg = await canal.fetch_message(message.id)
-        users = await msg.reactions[0].users().flatten() if msg.reactions else []
-        users = [u for u in users if not u.bot]
-        if not users:
-            await canal.send("❌ Personne n'a participé au giveaway.")
+class GiveawayView(discord.ui.View):
+    def __init__(self, message_id: int, prix: str):
+        super().__init__(timeout=None)
+        self.message_id = message_id
+        self.prix = prix
+
+    @discord.ui.button(label="🎉 Participer", style=discord.ButtonStyle.success)
+    async def participate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        member = interaction.user
+        if GIVEAWAY_ROLE_ID not in [role.id for role in member.roles]:
+            await interaction.response.send_message("❌ Vous n'avez pas le rôle requis pour participer.", ephemeral=True)
+            return
+        if self.message_id not in participants_giveaways:
+            participants_giveaways[self.message_id] = []
+        if member in participants_giveaways[self.message_id]:
+            await interaction.response.send_message("❌ Vous participez déjà.", ephemeral=True)
+            return
+        participants_giveaways[self.message_id].append(member)
+        await interaction.response.send_message(f"✅ {member.display_name} participe au giveaway !", ephemeral=True)
+
+    @discord.ui.button(label="👥 Participants", style=discord.ButtonStyle.secondary)
+    async def participants_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        participants = participants_giveaways.get(self.message_id, [])
+        if not participants:
+            text = "Aucun participant pour le moment."
         else:
-            winner = random.choice(users)
-            await canal.send(f"🎉 Félicitations {winner.mention} ! Tu as gagné **{prix}** 🎁")
-        # Mettre à jour l’embed final
-        embed = msg.embeds[0]
-        embed.description += "\n\n⏰ Giveaway terminé"
-        await msg.edit(embed=embed)
-    finally:
-        if message.id in active_giveaways:
-            del active_giveaways[message.id]
+            text = "\n".join([p.display_name for p in participants])
+        await interaction.response.send_message(f"**Participants:**\n{text}", ephemeral=True)
+
+async def run_giveaway(canal: discord.TextChannel, prix: str, total_seconds: int):
+    embed = discord.Embed(
+        title="🎉 GIVEAWAY 🎉",
+        description=f"Réagissez avec le bouton pour participer!\n\n**Lot:** {prix}\n**Temps restant:** {format_time(total_seconds)}",
+        color=int(config['colors']['primary'], 16)
+    )
+    embed.set_footer(text=f"Giveaway lancé par {bot.user.name}")
+    message = await canal.send(embed=embed, view=GiveawayView(message_id=0, prix=prix))
+    participants_giveaways[message.id] = []
+
+    remaining = total_seconds
+    while remaining > 0:
+        try:
+            msg = await canal.fetch_message(message.id)
+            embed = msg.embeds[0]
+            embed.description = f"Réagissez avec le bouton pour participer!\n\n**Lot:** {prix}\n**Temps restant:** {format_time(remaining)}"
+            await msg.edit(embed=embed)
+        except Exception:
+            pass
+        await asyncio.sleep(5)
+        remaining -= 5
+
+    # Fin du giveaway
+    msg = await canal.fetch_message(message.id)
+    participants = participants_giveaways.get(msg.id, [])
+    if not participants:
+        await canal.send("❌ Personne n'a participé au giveaway.")
+    else:
+        winner = random.choice(participants)
+        await canal.send(f"🎉 Félicitations {winner.mention} ! Tu as gagné **{prix}** 🎁")
+
+    embed = msg.embeds[0]
+    embed.description += "\n\n⏰ Giveaway terminé"
+    await msg.edit(embed=embed)
+    participants_giveaways.pop(msg.id, None)
+    active_giveaways.pop(msg.id, None)
 
 @bot.tree.command(name="giveaway", description="[ADMIN] Lancer un giveaway")
 async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
@@ -463,17 +373,8 @@ async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
         await interaction.response.send_message("❌ Canal de giveaway introuvable.", ephemeral=True)
         return
 
-    embed = discord.Embed(
-        title="🎉 GIVEAWAY 🎉",
-        description=f"Réagissez avec 🎉 pour participer!\n\n**Lot:** {prix}\n**Temps restant:** {format_time(total_seconds)}",
-        color=int(config['colors']['primary'], 16)
-    )
-    embed.set_footer(text=f"Lancé par {interaction.user.display_name}")
-    message = await canal.send(embed=embed)
-    await message.add_reaction("🎉")
-
-    task = asyncio.create_task(run_giveaway(canal, message, prix, total_seconds))
-    active_giveaways[message.id] = task
+    task = asyncio.create_task(run_giveaway(canal, prix, total_seconds))
+    active_giveaways[prix] = task
 
     await interaction.response.send_message(
         embed=discord.Embed(
@@ -484,26 +385,19 @@ async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
         ephemeral=True
     )
 
-# ---------------- FIN COMMANDES SLASH ----------------
-
+# ---------------- FIN BOT ----------------
 def main():
     if not DISCORD_BOT_TOKEN:
         print("❌ Token Discord manquant!")
-        print("🔧 Définissez DISCORD_BOT_TOKEN")
         exit(1)
     
     if not RUN_BOT:
         print("ℹ️ Bot non démarré (RUN_BOT=0)")
-        print("🔧 Pour démarrer: RUN_BOT=1")
         return
     
     try:
         print("🚀 Démarrage D-TOWN ROLEPLAY...")
         print(f"🔒 Tâches fond: {'OFF' if DISABLE_BACKGROUND_TASKS else 'ON'}")
-        if DISABLE_MYSQL:
-            print("🗄️ MySQL: Temporairement désactivé")
-        else:
-            print(f"🗄️ MySQL: {'Configuré' if all([MYSQL_HOST, MYSQL_USER]) else 'Non configuré'}")
         bot.run(DISCORD_BOT_TOKEN)
     except Exception as e:
         print(f"❌ Erreur démarrage: {e}")
