@@ -385,6 +385,17 @@ async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
         ephemeral=True
     )
 
+# ---------------- COMMAND /F8 ----------------
+@bot.tree.command(name="f8", description="Se connecter directement au serveur FiveM")
+async def f8(interaction: discord.Interaction):
+    server_ip = "148.113.219.113"
+    embed = discord.Embed(
+        title="Connexion au serveur",
+        description=f"Clique ici pour rejoindre directement le serveur : [Se connecter](fivem://connect/{server_ip})",
+        color=int(config['colors']['primary'], 16)
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 # ---------------- FIN BOT ----------------
 def main():
     if not DISCORD_BOT_TOKEN:
