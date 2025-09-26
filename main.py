@@ -227,6 +227,7 @@ def has_admin_role(interaction: discord.Interaction) -> bool:
 @bot.tree.command(name="f8", description="Connexion automatique au serveur")
 async def f8(interaction: discord.Interaction):
     from discord import ui
+    await interaction.response.defer()
     fivem_url = f"fivem://connect/{config['server_info']['fivem_ip']}"
     view = ui.View()
     view.add_item(ui.Button(label="▶️ Cliquer pour rejoindre", url=fivem_url))
@@ -235,7 +236,7 @@ async def f8(interaction: discord.Interaction):
         description="Clique sur le bouton pour rejoindre automatiquement le serveur !",
         color=int(config['colors']['success'], 16)
     )
-    await interaction.response.send_message(embed=embed, view=view)
+    await interaction.followup.send(embed=embed, view=view)
 
 # /donation
 @bot.tree.command(name="donation", description="Informations pour faire un don")
@@ -276,7 +277,7 @@ async def annonce(interaction: discord.Interaction, titre: str, message: str):
     embed.timestamp = datetime.now()
     await interaction.response.send_message(embed=embed)
 
-# /giveaway avec bouton interactif
+# /giveaway avec bouton interactif et décompte mm:ss
 @bot.tree.command(name="giveaway", description="[ADMIN] Lancer un giveaway")
 async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
     if not has_admin_role(interaction):
@@ -312,21 +313,30 @@ async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
     view = GiveawayButton()
     embed = discord.Embed(
         title="🎉 GIVEAWAY 🎉",
-        description=f"**Lot:** {prix}\n**Durée:** {duree}\nClique sur le bouton pour participer !",
+        description=f"**Lot:** {prix}\n**Temps restant:** {total_seconds//60:02}:{total_seconds%60:02}\nClique sur le bouton pour participer !",
         color=int(config['colors']['primary'], 16)
     )
     giveaway_message = await canal.send(embed=embed, view=view)
     await interaction.response.send_message(f"✅ Giveaway lancé pour {prix} dans {canal.mention}", ephemeral=True)
 
-    await asyncio.sleep(total_seconds)
+    # Décompte mm:ss
+    for remaining in range(total_seconds, 0, -10):
+        minutes, seconds = divmod(remaining, 60)
+        embed.description = f"**Lot:** {prix}\n**Temps restant:** {minutes:02}:{seconds:02}\nClique sur le bouton pour participer !"
+        await giveaway_message.edit(embed=embed)
+        await asyncio.sleep(10)
 
+    # Fin du giveaway
     if not participants:
         await canal.send("❌ Personne n'a participé au giveaway.")
         return
 
     winner_id = random.choice(list(participants))
     winner = canal.guild.get_member(winner_id)
-    await canal.send(f"🎉 Félicitations {winner.mention}, tu as gagné **{prix}** !")
+    if winner:
+        await canal.send(f"🎉 Félicitations {winner.mention}, tu as gagné **{prix}** !")
+    else:
+        await canal.send("❌ Le gagnant a quitté le serveur avant la fin du giveaway.")
 
 # ------------------ RUN ------------------
 def main():
