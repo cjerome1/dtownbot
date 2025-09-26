@@ -62,22 +62,21 @@ class DatabaseManager:
             'charset': 'utf8mb4'
         }
 
-    async def initialize(self):
+    async def initialize(self) -> bool:
         if DISABLE_MYSQL or not MYSQL_AVAILABLE:
             print("ℹ️ MySQL désactivé ou non installé")
             return False
+        if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
+            print("⚠️ Configuration MySQL incomplète")
+            return False
         try:
-            if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
-                print("⚠️ Configuration MySQL incomplète")
-                return False
-            connection = mysql.connector.connect(**self.connection_params)
-            if connection.is_connected():
+            conn = mysql.connector.connect(**self.connection_params)
+            if conn.is_connected():
                 print("✅ MySQL connecté")
-                connection.close()
+                conn.close()
                 return True
         except Error as e:
             print(f"⚠️ Erreur MySQL: {e}")
-            return False
         return False
 
     async def get_player_playtime(self, identifier: str) -> Optional[dict]:
@@ -85,52 +84,52 @@ class DatabaseManager:
             return None
         if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
             return None
-        connection = None
+        conn = None
         try:
-            connection = mysql.connector.connect(**self.connection_params)
-            cursor = connection.cursor(dictionary=True)
+            conn = mysql.connector.connect(**self.connection_params)
+            cursor = conn.cursor(dictionary=True)
             query = """
             SELECT 
-                IFNULL(JSON_UNQUOTE(JSON_EXTRACT(accounts, '$.bank')), 0) as bank_money,
-                IFNULL(JSON_UNQUOTE(JSON_EXTRACT(accounts, '$.money')), 0) as cash_money,
+                IFNULL(JSON_UNQUOTE(JSON_EXTRACT(accounts, '$.bank')), 0) AS bank_money,
+                IFNULL(JSON_UNQUOTE(JSON_EXTRACT(accounts, '$.money')), 0) AS cash_money,
                 last_seen
-            FROM users 
+            FROM users
             WHERE identifier = %s OR LOWER(name) = LOWER(%s)
             LIMIT 1
             """
             cursor.execute(query, (identifier, identifier))
             result = cursor.fetchone()
-            if result:
-                bank_money = result.get('bank_money', '0')
-                cash_money = result.get('cash_money', '0')
-                last_seen = result.get('last_seen', '')
-                if last_seen:
-                    try:
-                        if isinstance(last_seen, str):
-                            last_seen_dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
-                            time_diff = datetime.now() - last_seen_dt.replace(tzinfo=None)
-                            playtime_text = f"{time_diff.days} jours depuis la dernière connexion"
-                        else:
-                            playtime_text = "Données de temps non disponibles"
-                    except:
-                        playtime_text = "Format de date invalide"
-                else:
-                    playtime_text = "Jamais connecté"
-                return {
-                    'found': True,
-                    'player_name': identifier,
-                    'bank_money': str(bank_money),
-                    'cash_money': str(cash_money),
-                    'last_seen': str(last_seen),
-                    'estimated_playtime': playtime_text
-                }
-            return {'found': False}
+            if not result:
+                return {'found': False}
+            bank_money = result.get('bank_money', '0')
+            cash_money = result.get('cash_money', '0')
+            last_seen = result.get('last_seen', '')
+            if last_seen:
+                try:
+                    if isinstance(last_seen, str):
+                        last_seen_dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+                        time_diff = datetime.now() - last_seen_dt.replace(tzinfo=None)
+                        playtime_text = f"{time_diff.days} jours depuis la dernière connexion"
+                    else:
+                        playtime_text = "Données de temps non disponibles"
+                except:
+                    playtime_text = "Format de date invalide"
+            else:
+                playtime_text = "Jamais connecté"
+            return {
+                'found': True,
+                'player_name': identifier,
+                'bank_money': str(bank_money),
+                'cash_money': str(cash_money),
+                'last_seen': str(last_seen),
+                'estimated_playtime': playtime_text
+            }
         except Error as e:
             print(f"Erreur DB playtime: {e}")
             return None
         finally:
-            if connection and connection.is_connected():
-                connection.close()
+            if conn and conn.is_connected():
+                conn.close()
 
 db_manager = DatabaseManager()
 
@@ -164,52 +163,32 @@ class DTownBot(commands.Bot):
 
     @tasks.loop(minutes=5)
     async def update_status(self):
-        if not DISABLE_BACKGROUND_TASKS:
-            await self.update_status_once()
+        await self.update_status_once()
 
     async def update_status_once(self):
-        try:
-            server_info = await self.get_fivem_server_info()
-            self.server_online = server_info['online']
-            self.player_count = server_info['players']
-            self.max_players = server_info['max_players']
-            if server_info['online']:
-                status_text = "Dev en cours... Ouverture bientôt !"
-                await self.change_presence(
-                    status=discord.Status.online,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
-                )
-            else:
-                await self.change_presence(
-                    status=discord.Status.idle,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name="🔶 Serveur OFF")
-                )
-        except Exception as e:
-            print(f"Erreur statut serveur: {e}")
-            self.server_online = False
+        server_info = await self.get_fivem_server_info()
+        self.server_online = server_info['online']
+        self.player_count = server_info['players']
+        self.max_players = server_info['max_players']
+        status_text = "Dev en cours... Ouverture bientôt !" if server_info['online'] else "🔶 Serveur OFF"
+        status_color = discord.Status.online if server_info['online'] else discord.Status.idle
+        await self.change_presence(
+            status=status_color,
+            activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
+        )
 
     async def get_fivem_server_info(self):
+        ip = config['server_info']['fivem_ip']
         try:
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: requests.get(f"http://{config['server_info']['fivem_ip']}:30120/info.json", timeout=5)
-            )
+            response = await loop.run_in_executor(None, lambda: requests.get(f"http://{ip}:30120/info.json", timeout=5))
             if response.status_code == 200:
                 data = response.json()
-                return {
-                    'online': True,
-                    'players': data.get('clients', 0),
-                    'max_players': data.get('sv_maxclients', 64),
-                    'server_name': data.get('hostname', 'D-TOWN ROLEPLAY')
-                }
+                return {'online': True, 'players': data.get('clients', 0), 'max_players': data.get('sv_maxclients', 64), 'server_name': data.get('hostname', 'D-TOWN ROLEPLAY')}
         except:
             pass
         try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(config['server_info']['fivem_ip'], 30120),
-                timeout=5.0
-            )
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(ip, 30120), timeout=5)
             writer.close()
             await writer.wait_closed()
             return {'online': True, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
@@ -222,11 +201,11 @@ def has_admin_role(interaction: discord.Interaction) -> bool:
     return any(role.id in ADMIN_ROLE_IDS for role in getattr(interaction.user, 'roles', []))
 
 # ------------------ SLASH COMMANDS ------------------
+from discord import ui, ButtonStyle, Interaction
 
 # /f8 - Bouton cliquable
 @bot.tree.command(name="f8", description="Connexion automatique au serveur")
 async def f8(interaction: discord.Interaction):
-    from discord import ui
     fivem_url = f"fivem://connect/{config['server_info']['fivem_ip']}"
     view = ui.View()
     view.add_item(ui.Button(label="▶️ Cliquer pour rejoindre", url=fivem_url))
@@ -260,7 +239,11 @@ async def playtime(interaction: discord.Interaction, joueur: str = ""):
     elif bot.db_available:
         player_data = await db_manager.get_player_playtime(joueur)
         if player_data and player_data.get('found'):
-            embed.add_field(name="Stats", value=f"Banque: ${player_data['bank_money']}\nLiquide: ${player_data['cash_money']}\nTemps: {player_data['estimated_playtime']}", inline=False)
+            embed.add_field(
+                name="Stats",
+                value=f"Banque: ${player_data['bank_money']}\nLiquide: ${player_data['cash_money']}\nTemps: {player_data['estimated_playtime']}",
+                inline=False
+            )
         else:
             embed.add_field(name="Joueur Introuvable", value="Aucun joueur trouvé avec ce nom", inline=False)
     embed.timestamp = datetime.now()
@@ -295,7 +278,6 @@ async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
         return
 
     participants = set()
-    from discord import ui, ButtonStyle, Interaction
 
     class GiveawayButton(ui.View):
         @ui.button(label="🎉 Participer", style=ButtonStyle.primary)
