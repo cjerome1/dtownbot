@@ -223,16 +223,16 @@ def has_admin_role(interaction: discord.Interaction) -> bool:
 
 # ------------------ SLASH COMMANDS ------------------
 
-# /f8 - boîte visuelle "F8 connect"
+# /f8 - juste instructions textuelles
 @bot.tree.command(name="f8", description="Connexion automatique au serveur")
 async def f8(interaction: discord.Interaction):
-    fivem_url = f"fivem://connect/{config['server_info']['fivem_ip']}"
+    fivem_ip = config['server_info']['fivem_ip']
     embed = discord.Embed(
-        title="📦 F8 Connect - D-TOWN ROLEPLAY",
-        description=f"Pour rejoindre le serveur automatiquement depuis FiveM, clique sur le lien ci-dessous :\n\n[**Se connecter**]({fivem_url})",
+        title="Connexion F8 - D-TOWN ROLEPLAY",
+        description=f"Pour rejoindre le serveur, ouvre FiveM, appuie sur **F8**, et tape la commande suivante :\n\n`connect {fivem_ip}`",
         color=int(config['colors']['success'], 16)
     )
-    embed.set_footer(text="Ouvre ce lien depuis ton client FiveM ou navigateur compatible")
+    embed.set_footer(text="Fais ça depuis ton client FiveM")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # /donation
@@ -274,7 +274,7 @@ async def annonce(interaction: discord.Interaction, titre: str, message: str):
     embed.timestamp = datetime.now()
     await interaction.response.send_message(embed=embed)
 
-# /giveaway (avec bouton interactif)
+# /giveaway avec bouton interactif
 @bot.tree.command(name="giveaway", description="[ADMIN] Lancer un giveaway")
 async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
     if not has_admin_role(interaction):
