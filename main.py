@@ -233,7 +233,7 @@ async def f8(interaction: discord.Interaction):
         color=int(config['colors']['success'], 16)
     )
     embed.set_footer(text="Fais ça depuis ton client FiveM")
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(embed=embed, ephemeral=False)
 
 # /donation
 @bot.tree.command(name="donation", description="Informations pour faire un don")
