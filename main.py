@@ -246,24 +246,6 @@ async def donation(interaction: discord.Interaction):
     embed.timestamp = datetime.now()
     await interaction.response.send_message(embed=embed)
 
-# /playtime
-@bot.tree.command(name="playtime", description="Temps de jeu d'un joueur")
-async def playtime(interaction: discord.Interaction, joueur: str = ""):
-    await interaction.response.defer()
-    if not joueur:
-        joueur = interaction.user.display_name
-    embed = discord.Embed(title=f"Temps de Jeu - {joueur}", color=int(config['colors']['info'], 16))
-    if DISABLE_MYSQL:
-        embed.add_field(name="Fonctionnalité en Développement", value="Sera disponible à l'ouverture du serveur", inline=False)
-    elif bot.db_available:
-        player_data = await db_manager.get_player_playtime(joueur)
-        if player_data and player_data.get('found'):
-            embed.add_field(name="Stats", value=f"Banque: ${player_data['bank_money']}\nLiquide: ${player_data['cash_money']}\nTemps: {player_data['estimated_playtime']}", inline=False)
-        else:
-            embed.add_field(name="Joueur Introuvable", value="Aucun joueur trouvé avec ce nom", inline=False)
-    embed.timestamp = datetime.now()
-    await interaction.followup.send(embed=embed)
-
 # /annonce
 @bot.tree.command(name="annonce", description="[ADMIN] Envoyer une annonce")
 async def annonce(interaction: discord.Interaction, titre: str, message: str):
