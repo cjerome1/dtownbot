@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bot Discord D-TOWN ROLEPLAY - Railway Ready"""
+"""Bot Discord D-TOWN ROLEPLAY"""
 
 import discord
 from discord.ext import commands, tasks
@@ -12,7 +12,7 @@ from typing import Optional
 import random
 import re
 
-# MySQL (optionnel)
+# MySQL
 try:
     import mysql.connector
     from mysql.connector import Error
@@ -223,7 +223,7 @@ def has_admin_role(interaction: discord.Interaction) -> bool:
 
 # ------------------ SLASH COMMANDS ------------------
 
-# /f8 - juste instructions textuelles
+# /f8
 @bot.tree.command(name="f8", description="Connexion automatique au serveur")
 async def f8(interaction: discord.Interaction):
     fivem_ip = config['server_info']['fivem_ip']
@@ -274,7 +274,7 @@ async def annonce(interaction: discord.Interaction, titre: str, message: str):
     embed.timestamp = datetime.now()
     await interaction.response.send_message(embed=embed)
 
-# /giveaway avec bouton interactif
+# /giveaway
 @bot.tree.command(name="giveaway", description="[ADMIN] Lancer un giveaway")
 async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
     if not has_admin_role(interaction):
