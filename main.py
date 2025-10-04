@@ -1,18 +1,10 @@
 #!/usr/bin/env python3
-"""Bot Discord D-TOWN ROLEPLAY"""
-
 import discord
 from discord.ext import commands, tasks
-import json
-import os
-import requests
-import asyncio
+import json, os, requests, asyncio
 from datetime import datetime
 from typing import Optional
-import random
-import re
 
-# MySQL
 try:
     import mysql.connector
     from mysql.connector import Error
@@ -21,13 +13,13 @@ except ImportError:
     MYSQL_AVAILABLE = False
     Error = Exception
 
-# ------------------ CONFIG ------------------
+# Chargement config
 config_path = os.path.join(os.path.dirname(__file__), 'config.json')
 try:
     with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
 except FileNotFoundError:
-    print("❌ ERREUR: Fichier config.json introuvable!")
+    print("❌ config.json introuvable")
     exit(1)
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -42,14 +34,11 @@ ADMIN_ROLE_IDS = [
     1411835985666244688, 1370558513180311582, 1413711444096061510
 ]
 
-GIVEAWAY_ROLE_ID = 1365805440109117530  # whitelist
-GIVEAWAY_CHANNEL_ID = 1421094996899266582
-
 RUN_BOT = os.getenv("RUN_BOT", "0") == "1"
 DISABLE_BACKGROUND_TASKS = os.getenv("DISABLE_BACKGROUND_TASKS", "0") == "1"
 DISABLE_MYSQL = os.getenv("DISABLE_MYSQL", "1") == "1"
 
-# ------------------ DATABASE ------------------
+# Gestion DB
 class DatabaseManager:
     def __init__(self):
         self.connection_params = {
@@ -64,15 +53,12 @@ class DatabaseManager:
 
     async def initialize(self):
         if DISABLE_MYSQL or not MYSQL_AVAILABLE:
-            print("ℹ️ MySQL désactivé ou non installé")
             return False
         try:
             if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
-                print("⚠️ Configuration MySQL incomplète")
                 return False
             connection = mysql.connector.connect(**self.connection_params)
             if connection.is_connected():
-                print("✅ MySQL connecté")
                 connection.close()
                 return True
         except Error as e:
@@ -82,8 +68,6 @@ class DatabaseManager:
 
     async def get_player_playtime(self, identifier: str) -> Optional[dict]:
         if DISABLE_MYSQL or not MYSQL_AVAILABLE:
-            return None
-        if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE]):
             return None
         connection = None
         try:
@@ -111,11 +95,11 @@ class DatabaseManager:
                             time_diff = datetime.now() - last_seen_dt.replace(tzinfo=None)
                             playtime_text = f"{time_diff.days} jours depuis la dernière connexion"
                         else:
-                            playtime_text = "Données de temps non disponibles"
+                            playtime_text = "non disponible"
                     except:
-                        playtime_text = "Format de date invalide"
+                        playtime_text = "invalide"
                 else:
-                    playtime_text = "Jamais connecté"
+                    playtime_text = "jamais connecté"
                 return {
                     'found': True,
                     'player_name': identifier,
@@ -126,7 +110,7 @@ class DatabaseManager:
                 }
             return {'found': False}
         except Error as e:
-            print(f"Erreur DB playtime: {e}")
+            print(f"Erreur DB: {e}")
             return None
         finally:
             if connection and connection.is_connected():
@@ -134,7 +118,7 @@ class DatabaseManager:
 
 db_manager = DatabaseManager()
 
-# ------------------ BOT ------------------
+# Bot principal
 class DTownBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -154,10 +138,10 @@ class DTownBot(commands.Bot):
     async def setup_hook(self):
         self.db_available = await db_manager.initialize()
         await self.tree.sync()
-        print(f"Commandes synchronisées pour {self.user}")
+        print(f"✅ Commandes synchronisées pour {self.user}")
 
     async def on_ready(self):
-        print(f'✅ {self.user} connecté!')
+        print(f"🚀 {self.user} connecté")
         if not DISABLE_BACKGROUND_TASKS and not self.update_status.is_running():
             self.update_status.start()
         await self.update_status_once()
@@ -173,8 +157,9 @@ class DTownBot(commands.Bot):
             self.server_online = server_info['online']
             self.player_count = server_info['players']
             self.max_players = server_info['max_players']
+
             if server_info['online']:
-                status_text = "Dev en cours... Ouverture bientôt !"
+                status_text = "🟢 Serveur ouvert en Free Access"
                 await self.change_presence(
                     status=discord.Status.online,
                     activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
@@ -185,7 +170,7 @@ class DTownBot(commands.Bot):
                     activity=discord.Activity(type=discord.ActivityType.watching, name="🔶 Serveur OFF")
                 )
         except Exception as e:
-            print(f"Erreur statut serveur: {e}")
+            print(f"Erreur statut: {e}")
             self.server_online = False
 
     async def get_fivem_server_info(self):
@@ -221,22 +206,19 @@ bot = DTownBot()
 def has_admin_role(interaction: discord.Interaction) -> bool:
     return any(role.id in ADMIN_ROLE_IDS for role in getattr(interaction.user, 'roles', []))
 
-# ------------------ SLASH COMMANDS ------------------
-
-# /f8
-@bot.tree.command(name="f8", description="Connexion automatique au serveur")
+# Commandes
+@bot.tree.command(name="f8", description="Connexion auto au serveur")
 async def f8(interaction: discord.Interaction):
     fivem_ip = config['server_info']['fivem_ip']
     embed = discord.Embed(
         title="Connexion F8 - D-TOWN ROLEPLAY",
-        description=f"Pour rejoindre le serveur, ouvre FiveM, appuie sur **F8**, et tape la commande suivante :\n\n`connect {fivem_ip}`",
+        description=f"Ouvre FiveM, appuie sur **F8**, et tape :\n\n`connect {fivem_ip}`",
         color=int(config['colors']['success'], 16)
     )
-    embed.set_footer(text="Fais ça depuis ton client FiveM")
-    await interaction.response.send_message(embed=embed, ephemeral=False)
+    embed.set_footer(text="Depuis ton client FiveM")
+    await interaction.response.send_message(embed=embed)
 
-# /donation
-@bot.tree.command(name="donation", description="Informations pour faire un don")
+@bot.tree.command(name="donation", description="Infos donation")
 async def donation(interaction: discord.Interaction):
     embed = discord.Embed(
         title="💵 Donation D-TOWN ROLEPLAY",
@@ -246,7 +228,6 @@ async def donation(interaction: discord.Interaction):
     embed.timestamp = datetime.now()
     await interaction.response.send_message(embed=embed)
 
-# /annonce
 @bot.tree.command(name="annonce", description="[ADMIN] Envoyer une annonce")
 async def annonce(interaction: discord.Interaction, titre: str, message: str):
     if not has_admin_role(interaction):
@@ -256,67 +237,14 @@ async def annonce(interaction: discord.Interaction, titre: str, message: str):
     embed.timestamp = datetime.now()
     await interaction.response.send_message(embed=embed)
 
-# /giveaway
-@bot.tree.command(name="giveaway", description="[ADMIN] Lancer un giveaway")
-async def giveaway(interaction: discord.Interaction, prix: str, duree: str):
-    if not has_admin_role(interaction):
-        await interaction.response.send_message("❌ Accès refusé", ephemeral=True)
-        return
-
-    match = re.match(r"^(\d+)([smhd])$", duree)
-    if not match:
-        await interaction.response.send_message("❌ Durée invalide (ex: 1m, 1h)", ephemeral=True)
-        return
-
-    total_seconds = int(match.group(1)) * {'s':1,'m':60,'h':3600,'d':86400}[match.group(2)]
-    canal = bot.get_channel(GIVEAWAY_CHANNEL_ID)
-    if canal is None:
-        await interaction.response.send_message("❌ Canal giveaway introuvable", ephemeral=True)
-        return
-
-    participants = set()
-    from discord import ui, ButtonStyle, Interaction
-
-    class GiveawayButton(ui.View):
-        @ui.button(label="🎉 Participer", style=ButtonStyle.primary)
-        async def participate(self, button: ui.Button, btn_interaction: Interaction):
-            if GIVEAWAY_ROLE_ID not in [r.id for r in btn_interaction.user.roles]:
-                await btn_interaction.response.send_message("❌ Tu n'as pas le rôle nécessaire pour participer.", ephemeral=True)
-                return
-            if btn_interaction.user.id in participants:
-                await btn_interaction.response.send_message("✅ Tu es déjà inscrit au giveaway!", ephemeral=True)
-                return
-            participants.add(btn_interaction.user.id)
-            await btn_interaction.response.send_message(f"✅ {btn_interaction.user.display_name}, tu participes au giveaway!", ephemeral=True)
-
-    view = GiveawayButton()
-    embed = discord.Embed(
-        title="🎉 GIVEAWAY 🎉",
-        description=f"**Lot:** {prix}\n**Durée:** {duree}\nClique sur le bouton pour participer !",
-        color=int(config['colors']['primary'], 16)
-    )
-    giveaway_message = await canal.send(embed=embed, view=view)
-    await interaction.response.send_message(f"✅ Giveaway lancé pour {prix} dans {canal.mention}", ephemeral=True)
-
-    await asyncio.sleep(total_seconds)
-
-    if not participants:
-        await canal.send("❌ Personne n'a participé au giveaway.")
-        return
-
-    winner_id = random.choice(list(participants))
-    winner = canal.guild.get_member(winner_id)
-    await canal.send(f"🎉 Félicitations {winner.mention}, tu as gagné **{prix}** !")
-
-# ------------------ RUN ------------------
+# Lancement
 def main():
     if not DISCORD_BOT_TOKEN:
-        print("❌ Token Discord manquant!")
+        print("❌ Token Discord manquant")
         exit(1)
     if not RUN_BOT:
-        print("ℹ️ Bot non démarré (RUN_BOT=0)")
+        print("ℹ️ Bot désactivé (RUN_BOT=0)")
         return
-    print("🚀 Démarrage D-TOWN ROLEPLAY...")
     bot.run(DISCORD_BOT_TOKEN)
 
 if __name__ == "__main__":
