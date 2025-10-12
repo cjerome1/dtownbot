@@ -142,8 +142,11 @@ class DTownBot(commands.Bot):
 
     async def on_ready(self):
         print(f"🚀 {self.user} connecté")
-        if not DISABLE_BACKGROUND_TASKS and not self.update_status.is_running():
-            self.update_status.start()
+        if not DISABLE_BACKGROUND_TASKS:
+            if not self.update_status.is_running():
+                self.update_status.start()
+            if not self.send_f8_hourly.is_running():
+                self.send_f8_hourly.start()
         await self.update_status_once()
 
     @tasks.loop(minutes=5)
@@ -200,6 +203,21 @@ class DTownBot(commands.Bot):
             return {'online': True, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
         except:
             return {'online': False, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
+
+    # Tâche automatique F8 toutes les heures
+    @tasks.loop(hours=1)
+    async def send_f8_hourly(self):
+        channel_id = 1365802556957134858
+        channel = self.get_channel(channel_id)
+        if channel:
+            fivem_ip = config['server_info']['fivem_ip']
+            embed = discord.Embed(
+                title="Connexion F8 - D-TOWN ROLEPLAY",
+                description=f"Ouvre FiveM, appuie sur **F8**, et tape :\n\n`connect {fivem_ip}`",
+                color=int(config['colors']['success'], 16)
+            )
+            embed.set_footer(text="Depuis ton client FiveM")
+            await channel.send(embed=embed)
 
 bot = DTownBot()
 
