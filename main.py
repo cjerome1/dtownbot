@@ -8,6 +8,7 @@ from discord.ext import commands, tasks
 import json, os, requests, asyncio
 from datetime import datetime
 from typing import Optional
+import random
 
 try:
     import mysql.connector
@@ -137,6 +138,15 @@ class DTownBot(commands.Bot):
         self.db_available = False
         self.last_f8_sent = None
 
+        # Liste de statuts dynamiques
+        self.status_messages = [
+            "🟢 D-TOWN Roleplay — Rejoins la scène, montre ton grind 💪",
+            "🔥 RP sérieux, ambiance street garantie 🌆",
+            "💀 Halloween Update — frissons à D-TOWN 🎃",
+            "💸 Hustle, respect et survie dans D-TOWN 💯",
+            "🚗 La rue t’attend... connecte-toi maintenant !"
+        ]
+
     async def setup_hook(self):
         self.db_available = await db_manager.initialize()
         await self.tree.sync()
@@ -162,15 +172,21 @@ class DTownBot(commands.Bot):
             self.server_online = server_info['online']
             self.player_count = server_info['players']
             self.max_players = server_info['max_players']
+
             if server_info['online']:
+                # 🔥 Statut dynamique (choisi aléatoirement)
+                status_text = random.choice(self.status_messages)
                 await self.change_presence(
                     status=discord.Status.online,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name="🟢 Serveur ouvert en Free Access")
+                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
                 )
             else:
                 await self.change_presence(
                     status=discord.Status.idle,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name="🔶 Serveur OFF")
+                    activity=discord.Activity(
+                        type=discord.ActivityType.watching,
+                        name="🔶 Serveur fermé — Préparation en cours..."
+                    )
                 )
         except Exception as e:
             print(f"Erreur statut: {e}")
