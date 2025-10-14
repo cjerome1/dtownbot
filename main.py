@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# ╔════════════════════════════════════════════════════╗
+# ║                CJ DEV 2025 - D-TOWN BOT            ║
+# ╚════════════════════════════════════════════════════╝
+
 import discord
 from discord.ext import commands, tasks
 import json, os, requests, asyncio
@@ -13,7 +17,6 @@ except ImportError:
     MYSQL_AVAILABLE = False
     Error = Exception
 
-# Chargement config
 config_path = os.path.join(os.path.dirname(__file__), 'config.json')
 try:
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -38,7 +41,6 @@ RUN_BOT = os.getenv("RUN_BOT", "0") == "1"
 DISABLE_BACKGROUND_TASKS = os.getenv("DISABLE_BACKGROUND_TASKS", "0") == "1"
 DISABLE_MYSQL = os.getenv("DISABLE_MYSQL", "1") == "1"
 
-# Gestion DB
 class DatabaseManager:
     def __init__(self):
         self.connection_params = {
@@ -118,7 +120,6 @@ class DatabaseManager:
 
 db_manager = DatabaseManager()
 
-# Bot principal
 class DTownBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -134,6 +135,7 @@ class DTownBot(commands.Bot):
         self.player_count = 0
         self.max_players = 64
         self.db_available = False
+        self.last_f8_sent = None
 
     async def setup_hook(self):
         self.db_available = await db_manager.initialize()
@@ -160,12 +162,10 @@ class DTownBot(commands.Bot):
             self.server_online = server_info['online']
             self.player_count = server_info['players']
             self.max_players = server_info['max_players']
-
             if server_info['online']:
-                status_text = "🟢 Serveur ouvert en Free Access"
                 await self.change_presence(
                     status=discord.Status.online,
-                    activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
+                    activity=discord.Activity(type=discord.ActivityType.watching, name="🟢 Serveur ouvert en Free Access")
                 )
             else:
                 await self.change_presence(
@@ -204,27 +204,37 @@ class DTownBot(commands.Bot):
         except:
             return {'online': False, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
 
-    # Tâche automatique F8 toutes les heures
-    @tasks.loop(hours=1)
+    # ╔════════════════════════════════════════════════════╗
+    # ║                CJ DEV 2025 - F8 AUTO               ║
+    # ╚════════════════════════════════════════════════════╝
+    @tasks.loop(minutes=1)
     async def send_f8_hourly(self):
-        channel_id = 1365802556957134858
-        channel = self.get_channel(channel_id)
-        if channel:
-            fivem_ip = config['server_info']['fivem_ip']
-            embed = discord.Embed(
-                title="Connexion F8 - D-TOWN ROLEPLAY",
-                description=f"Ouvre FiveM, appuie sur **F8**, et tape :\n\n`connect {fivem_ip}`",
-                color=int(config['colors']['success'], 16)
-            )
-            embed.set_footer(text="Depuis ton client FiveM")
-            await channel.send(embed=embed)
+        now = datetime.now()
+        hour, minute = now.hour, now.minute
+        valid_hours = [9, 12, 15, 18, 21]
+
+        if hour in valid_hours and minute == 0:
+            if self.last_f8_sent == hour:
+                return
+            channel_id = 1365802556957134858
+            channel = self.get_channel(channel_id)
+            if channel:
+                fivem_ip = config['server_info']['fivem_ip']
+                embed = discord.Embed(
+                    title="Connexion F8 - D-TOWN ROLEPLAY",
+                    description=f"Ouvre FiveM, appuie sur **F8**, et tape :\n\n`connect {fivem_ip}`",
+                    color=int(config['colors']['success'], 16)
+                )
+                embed.set_footer(text=f"Depuis ton client FiveM • {now.strftime('%H:%M')}")
+                await channel.send(embed=embed)
+                self.last_f8_sent = hour
+                print(f"✅ F8 envoyé à {now.strftime('%H:%M')}")
 
 bot = DTownBot()
 
 def has_admin_role(interaction: discord.Interaction) -> bool:
     return any(role.id in ADMIN_ROLE_IDS for role in getattr(interaction.user, 'roles', []))
 
-# Commandes
 @bot.tree.command(name="f8", description="Connexion auto au serveur")
 async def f8(interaction: discord.Interaction):
     fivem_ip = config['server_info']['fivem_ip']
@@ -255,7 +265,6 @@ async def annonce(interaction: discord.Interaction, titre: str, message: str):
     embed.timestamp = datetime.now()
     await interaction.response.send_message(embed=embed)
 
-# Lancement
 def main():
     if not DISCORD_BOT_TOKEN:
         print("❌ Token Discord manquant")
