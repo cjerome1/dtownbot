@@ -141,8 +141,6 @@ class DTownBot(commands.Bot):
         # Liste de statuts dynamiques
         self.status_messages = [
             "🟢 D-TOWN Roleplay — Rejoins la scène, montre ton grind 💪",
-            "🔥 RP sérieux, ambiance street garantie 🌆",
-            "💀 Halloween Update — frissons à D-TOWN 🎃",
             "💸 Hustle, respect et survie dans D-TOWN 💯",
             "🚗 La rue t’attend... connecte-toi maintenant !"
         ]
