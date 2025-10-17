@@ -142,7 +142,7 @@ class DTownBot(commands.Bot):
         self.status_messages = [
             "🟢 D-TOWN Roleplay — Rejoins la scène, montre ton grind 💪",
             "💸 Hustle, respect et survie dans D-TOWN 💯",
-            "🚗 La rue t’attend... connecte-toi maintenant !"
+            "La rue t’attend... connecte-toi maintenant !"
         ]
 
     async def setup_hook(self):
