@@ -225,7 +225,7 @@ class DTownBot(commands.Bot):
     async def send_f8_hourly(self):
         now = datetime.now()
         hour, minute = now.hour, now.minute
-        valid_hours = [9, 12, 15, 18, 21]
+        valid_hours = [18, 21]
 
         if hour in valid_hours and minute == 0:
             if self.last_f8_sent == hour:
