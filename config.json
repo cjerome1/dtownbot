@@ -1,7 +1,7 @@
 {
     "bot_settings": {
-        "name": "D-TOWN ROLEPLAY",
-        "description": "Bot officiel du serveur D-TOWN ROLEPLAY",
+        "name": "Nova Roleplay",
+        "description": "Bot officiel du serveur Nova Roleplay",
         "prefix": "!"
     },
     "server_info": {
@@ -12,7 +12,7 @@
     "colors": {
         "primary": "00ff00",
         "success": "00ff00",
-        "error": "ff0000",
+        "danger": "ff0000",
         "warning": "ffaa00",
         "info": "0099ff"
     }
