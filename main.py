@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ╔════════════════════════════════════════════════════╗
-# ║                CJ DEV 2025 - D-TOWN BOT            ║
+# ║               CJ DEV 2025 - NOVA ROLEPLAY BOT      ║
 # ╚════════════════════════════════════════════════════╝
 
 import discord
@@ -18,6 +18,9 @@ except ImportError:
     MYSQL_AVAILABLE = False
     Error = Exception
 
+# ╔════════════════════════════════════════════════════╗
+# ║                   CONFIGURATION                   ║
+# ╚════════════════════════════════════════════════════╝
 config_path = os.path.join(os.path.dirname(__file__), 'config.json')
 try:
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -42,6 +45,9 @@ RUN_BOT = os.getenv("RUN_BOT", "0") == "1"
 DISABLE_BACKGROUND_TASKS = os.getenv("DISABLE_BACKGROUND_TASKS", "0") == "1"
 DISABLE_MYSQL = os.getenv("DISABLE_MYSQL", "1") == "1"
 
+# ╔════════════════════════════════════════════════════╗
+# ║                    DATABASE MANAGER                ║
+# ╚════════════════════════════════════════════════════╝
 class DatabaseManager:
     def __init__(self):
         self.connection_params = {
@@ -69,59 +75,12 @@ class DatabaseManager:
             return False
         return False
 
-    async def get_player_playtime(self, identifier: str) -> Optional[dict]:
-        if DISABLE_MYSQL or not MYSQL_AVAILABLE:
-            return None
-        connection = None
-        try:
-            connection = mysql.connector.connect(**self.connection_params)
-            cursor = connection.cursor(dictionary=True)
-            query = """
-            SELECT 
-                IFNULL(JSON_UNQUOTE(JSON_EXTRACT(accounts, '$.bank')), 0) as bank_money,
-                IFNULL(JSON_UNQUOTE(JSON_EXTRACT(accounts, '$.money')), 0) as cash_money,
-                last_seen
-            FROM users 
-            WHERE identifier = %s OR LOWER(name) = LOWER(%s)
-            LIMIT 1
-            """
-            cursor.execute(query, (identifier, identifier))
-            result = cursor.fetchone()
-            if result:
-                bank_money = result.get('bank_money', '0')
-                cash_money = result.get('cash_money', '0')
-                last_seen = result.get('last_seen', '')
-                if last_seen:
-                    try:
-                        if isinstance(last_seen, str):
-                            last_seen_dt = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
-                            time_diff = datetime.now() - last_seen_dt.replace(tzinfo=None)
-                            playtime_text = f"{time_diff.days} jours depuis la dernière connexion"
-                        else:
-                            playtime_text = "non disponible"
-                    except:
-                        playtime_text = "invalide"
-                else:
-                    playtime_text = "jamais connecté"
-                return {
-                    'found': True,
-                    'player_name': identifier,
-                    'bank_money': str(bank_money),
-                    'cash_money': str(cash_money),
-                    'last_seen': str(last_seen),
-                    'estimated_playtime': playtime_text
-                }
-            return {'found': False}
-        except Error as e:
-            print(f"Erreur DB: {e}")
-            return None
-        finally:
-            if connection and connection.is_connected():
-                connection.close()
-
 db_manager = DatabaseManager()
 
-class DTownBot(commands.Bot):
+# ╔════════════════════════════════════════════════════╗
+# ║                    NOVA ROLEPLAY BOT               ║
+# ╚════════════════════════════════════════════════════╝
+class NovaBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -138,31 +97,23 @@ class DTownBot(commands.Bot):
         self.db_available = False
         self.last_f8_sent = None
 
-        # Liste de statuts dynamiques
-        self.status_messages = [
-            "🟢 D-TOWN Roleplay — Rejoins la scène, montre ton grind 💪",
-            "💸 Hustle, respect et survie dans D-TOWN 💯",
-            "La rue t’attend... connecte-toi maintenant !"
-        ]
-
     async def setup_hook(self):
         self.db_available = await db_manager.initialize()
         await self.tree.sync()
         print(f"✅ Commandes synchronisées pour {self.user}")
 
     async def on_ready(self):
-        print(f"🚀 {self.user} connecté")
+        print(f"🚀 {self.user} connecté à Discord")
         if not DISABLE_BACKGROUND_TASKS:
             if not self.update_status.is_running():
                 self.update_status.start()
-            if not self.send_f8_hourly.is_running():
-                self.send_f8_hourly.start()
+            if not self.send_f8_auto.is_running():
+                self.send_f8_auto.start()
         await self.update_status_once()
 
     @tasks.loop(minutes=5)
     async def update_status(self):
-        if not DISABLE_BACKGROUND_TASKS:
-            await self.update_status_once()
+        await self.update_status_once()
 
     async def update_status_once(self):
         try:
@@ -172,8 +123,7 @@ class DTownBot(commands.Bot):
             self.max_players = server_info['max_players']
 
             if server_info['online']:
-                # 🔥 Statut dynamique (choisi aléatoirement)
-                status_text = random.choice(self.status_messages)
+                status_text = f"🟢 {self.player_count}/{self.max_players} joueurs sur Nova Roleplay"
                 await self.change_presence(
                     status=discord.Status.online,
                     activity=discord.Activity(type=discord.ActivityType.watching, name=status_text)
@@ -181,10 +131,7 @@ class DTownBot(commands.Bot):
             else:
                 await self.change_presence(
                     status=discord.Status.idle,
-                    activity=discord.Activity(
-                        type=discord.ActivityType.watching,
-                        name="🔴 Préparation en cours..."
-                    )
+                    activity=discord.Activity(type=discord.ActivityType.watching, name="🔴 Serveur hors ligne...")
                 )
         except Exception as e:
             print(f"Erreur statut: {e}")
@@ -203,29 +150,20 @@ class DTownBot(commands.Bot):
                     'online': True,
                     'players': data.get('clients', 0),
                     'max_players': data.get('sv_maxclients', 64),
-                    'server_name': data.get('hostname', 'D-TOWN ROLEPLAY')
+                    'server_name': data.get('hostname', 'Nova Roleplay')
                 }
         except:
             pass
-        try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(config['server_info']['fivem_ip'], 30120),
-                timeout=5.0
-            )
-            writer.close()
-            await writer.wait_closed()
-            return {'online': True, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
-        except:
-            return {'online': False, 'players': 0, 'max_players': 64, 'server_name': 'D-TOWN ROLEPLAY'}
+        return {'online': False, 'players': 0, 'max_players': 64, 'server_name': 'Nova Roleplay'}
 
     # ╔════════════════════════════════════════════════════╗
-    # ║                CJ DEV 2025 - F8 AUTO               ║
+    # ║                     F8 AUTO                        ║
     # ╚════════════════════════════════════════════════════╝
     @tasks.loop(minutes=1)
-    async def send_f8_hourly(self):
+    async def send_f8_auto(self):
         now = datetime.now()
         hour, minute = now.hour, now.minute
-        valid_hours = [18, 21]
+        valid_hours = list(range(0, 24, 2))  # Toutes les 2h : 0,2,4,...,22
 
         if hour in valid_hours and minute == 0:
             if self.last_f8_sent == hour:
@@ -235,7 +173,7 @@ class DTownBot(commands.Bot):
             if channel:
                 fivem_ip = config['server_info']['fivem_ip']
                 embed = discord.Embed(
-                    title="Connexion F8 - D-TOWN ROLEPLAY",
+                    title="Connexion F8 - Nova Roleplay",
                     description=f"Ouvre FiveM, appuie sur **F8**, et tape :\n\n`connect {fivem_ip}`",
                     color=int(config['colors']['success'], 16)
                 )
@@ -244,7 +182,11 @@ class DTownBot(commands.Bot):
                 self.last_f8_sent = hour
                 print(f"✅ F8 envoyé à {now.strftime('%H:%M')}")
 
-bot = DTownBot()
+bot = NovaBot()
+
+# ╔════════════════════════════════════════════════════╗
+# ║                     COMMANDES                      ║
+# ╚════════════════════════════════════════════════════╝
 
 def has_admin_role(interaction: discord.Interaction) -> bool:
     return any(role.id in ADMIN_ROLE_IDS for role in getattr(interaction.user, 'roles', []))
@@ -253,17 +195,17 @@ def has_admin_role(interaction: discord.Interaction) -> bool:
 async def f8(interaction: discord.Interaction):
     fivem_ip = config['server_info']['fivem_ip']
     embed = discord.Embed(
-        title="Connexion F8 - D-TOWN ROLEPLAY",
+        title="Connexion F8 - Nova Roleplay",
         description=f"Ouvre FiveM, appuie sur **F8**, et tape :\n\n`connect {fivem_ip}`",
         color=int(config['colors']['success'], 16)
     )
     embed.set_footer(text="Depuis ton client FiveM")
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="donation", description="Infos donation")
+@bot.tree.command(name="donation", description="Infos donation Nova Roleplay")
 async def donation(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="💵 Donation D-TOWN ROLEPLAY",
+        title="💵 Donation Nova Roleplay",
         description=f"Soutenez le serveur par virement Interac: `{config['server_info']['donation_info']}`",
         color=int(config['colors']['primary'], 16)
     )
@@ -279,6 +221,30 @@ async def annonce(interaction: discord.Interaction, titre: str, message: str):
     embed.timestamp = datetime.now()
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="clear", description="[ADMIN] Supprime un nombre de messages")
+async def clear(interaction: discord.Interaction, nombre: int):
+    if not has_admin_role(interaction):
+        await interaction.response.send_message("❌ Accès refusé", ephemeral=True)
+        return
+    deleted = await interaction.channel.purge(limit=nombre)
+    await interaction.response.send_message(f"🧹 {len(deleted)} messages supprimés.", ephemeral=True)
+
+@bot.tree.command(name="restart", description="[ADMIN] Annonce un redémarrage serveur")
+async def restart(interaction: discord.Interaction):
+    if not has_admin_role(interaction):
+        await interaction.response.send_message("❌ Accès refusé", ephemeral=True)
+        return
+    embed = discord.Embed(
+        title="⚙️ Redémarrage en cours",
+        description="Le serveur **Nova Roleplay** redémarre, revenez dans quelques minutes.",
+        color=int(config['colors']['danger'], 16)
+    )
+    embed.timestamp = datetime.now()
+    await interaction.response.send_message(embed=embed)
+
+# ╔════════════════════════════════════════════════════╗
+# ║                     MAIN                           ║
+# ╚════════════════════════════════════════════════════╝
 def main():
     if not DISCORD_BOT_TOKEN:
         print("❌ Token Discord manquant")
