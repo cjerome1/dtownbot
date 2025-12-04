@@ -1,1 +1,1 @@
-Développé pour D-Town Roleplay par CJ Dev
+Développé pour Nova Roleplay par CJ Dev
