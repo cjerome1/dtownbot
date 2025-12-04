@@ -183,7 +183,7 @@ class DTownBot(commands.Bot):
                     status=discord.Status.idle,
                     activity=discord.Activity(
                         type=discord.ActivityType.watching,
-                        name="🔶 Serveur fermé — Préparation en cours..."
+                        name="🔴 Préparation en cours..."
                     )
                 )
         except Exception as e:
